@@ -1,5 +1,1 @@
-websockets
-
-run cmd: 
-    chưa activate: .venv\Scripts\python.exe robot_agent.py
-    activate: python robot_agent.py
+websockets>=12.0
