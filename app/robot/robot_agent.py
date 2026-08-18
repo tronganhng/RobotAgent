@@ -1,8 +1,6 @@
 import asyncio
 import contextlib
-import enum
 import json
-import logging
 from typing import Any, Dict, Optional
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -14,29 +12,15 @@ from app.handlers.message_handler import extract_robot_id
 
 
 class RobotAgent:
-    """
-    Robot Agent client that interfaces between Fleet Backend and robot hardware/simulation.
-
-    Registration flow:
-    1. Connect to Fleet Backend WebSocket endpoint.
-    2. Send 'RegisterRobot' request with initial robot state.
-    3. Receive assigned 'RobotId' from server.
-    4. Send 'RegisterClient' message with ClientType = 'Robot' and assigned RobotId.
-    """
 
     def __init__(self, server_url: str = DEFAULT_SERVER_URL) -> None:
         self.server_url: str = server_url
         self.robot_id: Optional[str] = None
         self.is_client_registered: bool = False
-        self.ws: Optional[websockets.WebSocketClientProtocol] = None
+        self.ws: Optional[Any] = None
         self._registration_event: asyncio.Event = asyncio.Event()
 
-    async def send_message(
-        self,
-        message_type: SocketMessageType,
-        payload: Optional[Any] = None,
-        request_id: Optional[str] = None,
-    ) -> None:
+    async def send_message(self, message_type: SocketMessageType, payload: Optional[Any] = None, request_id: Optional[str] = None) -> None:
         """Constructs and sends a standardized JSON message over the WebSocket connection."""
         if self.ws is None:
             raise RuntimeError("WebSocket connection is not established.")
@@ -50,11 +34,10 @@ class RobotAgent:
 
         raw_payload = json.dumps(message)
         await self.ws.send(raw_payload)
-        logger.info(f"Sent [{message_type}] (RequestId: {message['RequestId']}): {raw_payload}")
+        logger.info(f"Sent: {raw_payload}")
 
     async def register_robot(self) -> None:
         """Step 1: Send RegisterRobot request with the initial state to the Backend."""
-        logger.info("Step 1/3: Sending RegisterRobot request...")
         initial_state = build_initial_robot_state(robot_id=self.robot_id or "")
         await self.send_message(
             message_type=SocketMessageType.RegisterRobot,
@@ -63,17 +46,12 @@ class RobotAgent:
 
     async def register_client(self, robot_id: str) -> None:
         """Step 3: Send RegisterClient message with Payload: 'Robot'."""
-        logger.info(f"Step 3/3: Sending RegisterClient message for RobotId: '{robot_id}'...")
         await self.send_message(
             message_type=SocketMessageType.RegisterClient,
             payload="Robot",
         )
         self.is_client_registered = True
         logger.info(f"Successfully sent RegisterClient (Payload: 'Robot', RobotId: {robot_id}).")
-
-    def _extract_robot_id(self, data: Dict[str, Any]) -> Optional[str]:
-        """Extracts RobotId from data or payload with case-insensitivity."""
-        return extract_robot_id(data)
 
     async def handle_message(self, raw_msg: str) -> None:
         """Parses and handles incoming JSON messages from the Fleet Backend."""
@@ -91,11 +69,10 @@ class RobotAgent:
 
         # Check for RobotId assignment if not yet received
         if not self.robot_id:
-            extracted_id = self._extract_robot_id(data)
+            extracted_id = extract_robot_id(data)
             if extracted_id:
                 self.robot_id = extracted_id
                 self._registration_event.set()
-                logger.info(f"Step 2/3: Received assigned RobotId: '{self.robot_id}' from backend.")
 
                 # Automatically trigger Step 3: RegisterClient with ClientType = Robot
                 await self.register_client(self.robot_id)
