@@ -1,6 +1,8 @@
 import asyncio
 import contextlib
+import enum
 import json
+import logging
 from typing import Any, Dict, Optional
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -8,19 +10,41 @@ from websockets.exceptions import ConnectionClosed
 from app.config import DEFAULT_SERVER_URL, logger
 from app.communication.message_protocol import SocketMessageType, format_message
 from app.robot.robot_state import build_initial_robot_state
-from app.handlers.message_handler import extract_robot_id
+from app.handlers.message_handler import extract_robot_id, parse_move_coordinates
+from app.navigation.navigation_interface import NavigationInterface
+from app.navigation.mock_navigation import MockNavigation
 
 
 class RobotAgent:
+    """
+    Robot Agent client that interfaces between Fleet Backend and robot hardware/simulation.
 
-    def __init__(self, server_url: str = DEFAULT_SERVER_URL) -> None:
+    Registration flow:
+    1. Connect to Fleet Backend WebSocket endpoint.
+    2. Send 'RegisterRobot' request with initial robot state.
+    3. Receive assigned 'RobotId' from server.
+    4. Send 'RegisterClient' message with ClientType = 'Robot' and assigned RobotId.
+    """
+
+    def __init__(
+        self,
+        server_url: str = DEFAULT_SERVER_URL,
+        navigation: Optional[NavigationInterface] = None,
+    ) -> None:
         self.server_url: str = server_url
+        self.navigation: NavigationInterface = navigation or MockNavigation()
         self.robot_id: Optional[str] = None
         self.is_client_registered: bool = False
         self.ws: Optional[Any] = None
         self._registration_event: asyncio.Event = asyncio.Event()
+        self._current_move_task: Optional[asyncio.Task] = None
 
-    async def send_message(self, message_type: SocketMessageType, payload: Optional[Any] = None, request_id: Optional[str] = None) -> None:
+    async def send_message(
+        self,
+        message_type: SocketMessageType,
+        payload: Optional[Any] = None,
+        request_id: Optional[str] = None,
+    ) -> None:
         """Constructs and sends a standardized JSON message over the WebSocket connection."""
         if self.ws is None:
             raise RuntimeError("WebSocket connection is not established.")
@@ -34,10 +58,11 @@ class RobotAgent:
 
         raw_payload = json.dumps(message)
         await self.ws.send(raw_payload)
-        logger.info(f"Sent: {raw_payload}")
+        logger.info(f"Sent [{message_type}] (RequestId: {message['RequestId']}): {raw_payload}")
 
     async def register_robot(self) -> None:
         """Step 1: Send RegisterRobot request with the initial state to the Backend."""
+        logger.info("Step 1/3: Sending RegisterRobot request...")
         initial_state = build_initial_robot_state(robot_id=self.robot_id or "")
         await self.send_message(
             message_type=SocketMessageType.RegisterRobot,
@@ -46,12 +71,32 @@ class RobotAgent:
 
     async def register_client(self, robot_id: str) -> None:
         """Step 3: Send RegisterClient message with Payload: 'Robot'."""
+        logger.info(f"Step 3/3: Sending RegisterClient message for RobotId: '{robot_id}'...")
         await self.send_message(
             message_type=SocketMessageType.RegisterClient,
             payload="Robot",
         )
         self.is_client_registered = True
         logger.info(f"Successfully sent RegisterClient (Payload: 'Robot', RobotId: {robot_id}).")
+
+    def _extract_robot_id(self, data: Dict[str, Any]) -> Optional[str]:
+        """Extracts RobotId from data or payload with case-insensitivity."""
+        return extract_robot_id(data)
+
+    async def _execute_move(self, x: float, y: float) -> None:
+        """Executes navigation to (x, y) asynchronously."""
+        try:
+            success = await self.navigation.navigate_to(x, y)
+            if success:
+                logger.info(f"Robot successfully arrived at ({x}, {y}).")
+                # Send arrival notification to Backend if connected
+                if self.ws:
+                    with contextlib.suppress(Exception):
+                        await self.send_message(message_type=SocketMessageType.RobotArrived, payload=True)
+        except asyncio.CancelledError:
+            logger.info(f"Navigation to ({x}, {y}) was cancelled.")
+        except Exception as e:
+            logger.error(f"Error during navigation to ({x}, {y}): {e}", exc_info=True)
 
     async def handle_message(self, raw_msg: str) -> None:
         """Parses and handles incoming JSON messages from the Fleet Backend."""
@@ -69,13 +114,28 @@ class RobotAgent:
 
         # Check for RobotId assignment if not yet received
         if not self.robot_id:
-            extracted_id = extract_robot_id(data)
+            extracted_id = self._extract_robot_id(data)
             if extracted_id:
                 self.robot_id = extracted_id
                 self._registration_event.set()
+                logger.info(f"Step 2/3: Received assigned RobotId: '{self.robot_id}' from backend.")
 
                 # Automatically trigger Step 3: RegisterClient with ClientType = Robot
                 await self.register_client(self.robot_id)
+
+        # Handle MoveRobot command
+        if msg_type in (SocketMessageType.MoveRobot.value, "MoveRobot"):
+            payload = data.get("Payload") if "Payload" in data else data.get("payload")
+            coords = parse_move_coordinates(payload)
+            if coords is not None:
+                x, y = coords
+                logger.info(f"Received MoveRobot command -> target: ({x}, {y}). Starting navigation...")
+                # Cancel existing movement task if running
+                if self._current_move_task and not self._current_move_task.done():
+                    self._current_move_task.cancel()
+                self._current_move_task = asyncio.create_task(self._execute_move(x, y))
+            else:
+                logger.warning(f"Unable to parse MoveRobot coordinates from payload: {payload}")
 
     async def listen(self) -> None:
         """Listens for incoming messages until connection closes."""
@@ -114,6 +174,8 @@ class RobotAgent:
                     logger.info("Disconnected cleanly.")
                 finally:
                     listener_task.cancel()
+                    if self._current_move_task and not self._current_move_task.done():
+                        self._current_move_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await listener_task
 
