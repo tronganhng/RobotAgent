@@ -50,16 +50,23 @@ python robot_agent.py
 .venv\Scripts\python.exe robot_agent.py
 ```
 
+To run unit tests:
+
+```powershell
+.venv\Scripts\python.exe -m unittest tests/test_registration_flow.py
+```
+
 To stop the agent, press `Ctrl + C`.
 
 ---
 
 ## 4. Architecture & Roadmap
 
-1. **Phase 1 (Current):** WebSocket connection, keepalive, clean shutdown.
-2. **Phase 2:** Agent registration (`RegisterClient` & receive `RobotId`).
+1. **Phase 1 (Completed):** WebSocket connection, keepalive, clean shutdown.
+2. **Phase 2 (Completed):** 3-Step Agent registration (`RegisterRobot` -> receive `RobotId` -> `RegisterClient` with `ClientType: Robot`).
 3. **Phase 3:** Command receiving (`MoveRobot`).
 4. **Phase 4:** Mock navigation & arrival reporting (`RobotArrived`).
 5. **Phase 5:** Robot state reporting (position, rotation, battery, status).
 6. **Phase 6:** Heartbeat & automatic reconnection.
 7. **Phase 7 & 8:** ROS 2 / Nav2 integration on TurtleBot 4.
+
