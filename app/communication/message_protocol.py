@@ -5,9 +5,11 @@ import uuid
 
 class SocketMessageType(str, enum.Enum):
     RegisterClient = "RegisterClient"
+    ServerResponse = "ServerResponse"
     RegisterRobot = "RegisterRobot"
     RobotState = "RobotState"
     MoveRobot = "MoveRobot"
+    StopRobot = "StopRobot"
     RobotArrived = "RobotArrived"
 
 

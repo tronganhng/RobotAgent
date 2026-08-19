@@ -83,6 +83,17 @@ class RobotAgent:
         """Extracts RobotId from data or payload with case-insensitivity."""
         return extract_robot_id(data)
 
+    async def stop(self) -> None:
+        """Stops any active navigation task and commands navigation interface to cancel."""
+        logger.info("Stopping robot navigation...")
+        if self._current_move_task and not self._current_move_task.done():
+            self._current_move_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._current_move_task
+            self._current_move_task = None
+        await self.navigation.cancel()
+        logger.info("Robot stopped successfully.")
+
     async def _execute_move(self, x: float, y: float) -> None:
         """Executes navigation to (x, y) asynchronously."""
         try:
@@ -92,7 +103,10 @@ class RobotAgent:
                 # Send arrival notification to Backend if connected
                 if self.ws:
                     with contextlib.suppress(Exception):
-                        await self.send_message(message_type=SocketMessageType.RobotArrived, payload=True)
+                        await self.send_message(
+                            message_type=SocketMessageType.RobotArrived,
+                            payload=True,
+                        )
         except asyncio.CancelledError:
             logger.info(f"Navigation to ({x}, {y}) was cancelled.")
         except Exception as e:
@@ -112,8 +126,8 @@ class RobotAgent:
         msg_type = data.get("Type") or data.get("type") or "Unknown"
         logger.info(f"Received message [{msg_type}]: {raw_msg}")
 
-        # Check for RobotId assignment if not yet received
-        if not self.robot_id:
+        # Check for RobotId assignment if not yet received (during registration flow)
+        if msg_type in (SocketMessageType.ServerResponse.value, "ServerResponse"):
             extracted_id = self._extract_robot_id(data)
             if extracted_id:
                 self.robot_id = extracted_id
@@ -121,7 +135,8 @@ class RobotAgent:
                 logger.info(f"Step 2/3: Received assigned RobotId: '{self.robot_id}' from backend.")
 
                 # Automatically trigger Step 3: RegisterClient with ClientType = Robot
-                await self.register_client(self.robot_id)
+                if self.ws:
+                    await self.register_client(self.robot_id)
 
         # Handle MoveRobot command
         if msg_type in (SocketMessageType.MoveRobot.value, "MoveRobot"):
@@ -136,6 +151,11 @@ class RobotAgent:
                 self._current_move_task = asyncio.create_task(self._execute_move(x, y))
             else:
                 logger.warning(f"Unable to parse MoveRobot coordinates from payload: {payload}")
+
+        # Handle StopRobot command
+        elif msg_type in (SocketMessageType.StopRobot.value, "StopRobot"):
+            logger.info("Received StopRobot command from backend.")
+            await self.stop()
 
     async def listen(self) -> None:
         """Listens for incoming messages until connection closes."""
