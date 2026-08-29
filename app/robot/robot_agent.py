@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import enum
+import datetime
 import json
 import logging
 from typing import Any, Dict, Optional
@@ -9,7 +10,7 @@ from websockets.exceptions import ConnectionClosed
 
 from app.config import DEFAULT_SERVER_URL, logger
 from app.communication.message_protocol import SocketMessageType, format_message
-from app.robot.robot_state import build_initial_robot_state
+from app.robot.robot_state import build_initial_robot_state, RobotStatus
 from app.handlers.message_handler import extract_robot_id, parse_move_coordinates
 from app.navigation.navigation_interface import NavigationInterface
 from app.navigation.mock_navigation import MockNavigation
@@ -38,6 +39,8 @@ class RobotAgent:
         self.ws: Optional[Any] = None
         self._registration_event: asyncio.Event = asyncio.Event()
         self._current_move_task: Optional[asyncio.Task] = None
+        self._state_publisher_task: Optional[asyncio.Task] = None
+        self.robot_state: Dict[str, Any] = build_initial_robot_state()
 
     async def send_message(
         self,
@@ -58,15 +61,15 @@ class RobotAgent:
 
         raw_payload = json.dumps(message)
         await self.ws.send(raw_payload)
-        logger.info(f"Sent [{message_type}] (RequestId: {message['RequestId']}): {raw_payload}")
+        # logger.info(f"Sent [{message_type}] (RequestId: {message['RequestId']}): {raw_payload}")
 
     async def register_robot(self) -> None:
         """Step 1: Send RegisterRobot request with the initial state to the Backend."""
         logger.info("Step 1/3: Sending RegisterRobot request...")
-        initial_state = build_initial_robot_state(robot_id=self.robot_id or "")
+        self.robot_state["RobotId"] = self.robot_id or ""
         await self.send_message(
             message_type=SocketMessageType.RegisterRobot,
-            payload=initial_state,
+            payload=self.robot_state,
         )
 
     async def register_client(self, robot_id: str) -> None:
@@ -92,14 +95,17 @@ class RobotAgent:
                 await self._current_move_task
             self._current_move_task = None
         await self.navigation.cancel()
+        self.robot_state["Status"] = RobotStatus.Idle.value
         logger.info("Robot stopped successfully.")
 
     async def _execute_move(self, x: float, y: float) -> None:
         """Executes navigation to (x, y) asynchronously."""
         try:
+            self.robot_state["Status"] = RobotStatus.DoingTask.value
             success = await self.navigation.navigate_to(x, y)
             if success:
                 logger.info(f"Robot successfully arrived at ({x}, {y}).")
+                self.robot_state["Status"] = RobotStatus.Idle.value
                 # Send arrival notification to Backend if connected
                 if self.ws:
                     with contextlib.suppress(Exception):
@@ -111,6 +117,9 @@ class RobotAgent:
             logger.info(f"Navigation to ({x}, {y}) was cancelled.")
         except Exception as e:
             logger.error(f"Error during navigation to ({x}, {y}): {e}", exc_info=True)
+        finally:
+            if self.robot_state["Status"] == RobotStatus.DoingTask.value:
+                self.robot_state["Status"] = RobotStatus.Idle.value
 
     async def handle_message(self, raw_msg: str) -> None:
         """Parses and handles incoming JSON messages from the Fleet Backend."""
@@ -131,6 +140,7 @@ class RobotAgent:
             extracted_id = self._extract_robot_id(data)
             if extracted_id:
                 self.robot_id = extracted_id
+                self.robot_state["RobotId"] = self.robot_id
                 self._registration_event.set()
                 logger.info(f"Step 2/3: Received assigned RobotId: '{self.robot_id}' from backend.")
 
@@ -157,6 +167,29 @@ class RobotAgent:
             logger.info("Received StopRobot command from backend.")
             await self.stop()
 
+    async def publish_state(self) -> None:
+        """Continuously publishes the robot state to the backend."""
+        while True:
+            await self._registration_event.wait()
+            
+            if self.ws and self.is_client_registered:
+                try:
+                    # Update pose from navigation
+                    x, y, rotation = self.navigation.get_current_pose()
+                    self.robot_state["X"] = x
+                    self.robot_state["Y"] = y
+                    self.robot_state["Rotation"] = rotation
+                    self.robot_state["LastHeartbeat"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                    
+                    await self.send_message(
+                        message_type=SocketMessageType.RobotState,
+                        payload=self.robot_state,
+                    )
+                except Exception as e:
+                    logger.error(f"Error publishing robot state: {e}")
+            
+            await asyncio.sleep(1.0)
+
     async def listen(self) -> None:
         """Listens for incoming messages until connection closes."""
         if not self.ws:
@@ -182,8 +215,9 @@ class RobotAgent:
                 # Step 1: Send RegisterRobot
                 await self.register_robot()
 
-                # Start listener task
+                # Start listener task and state publisher task
                 listener_task = asyncio.create_task(self.listen())
+                self._state_publisher_task = asyncio.create_task(self.publish_state())
 
                 try:
                     await websocket.wait_closed()
@@ -194,10 +228,15 @@ class RobotAgent:
                     logger.info("Disconnected cleanly.")
                 finally:
                     listener_task.cancel()
+                    if self._state_publisher_task:
+                        self._state_publisher_task.cancel()
                     if self._current_move_task and not self._current_move_task.done():
                         self._current_move_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await listener_task
+                    if self._state_publisher_task:
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await self._state_publisher_task
 
         except (ConnectionRefusedError, OSError) as e:
             logger.error(f"Connection failed: {e}")
