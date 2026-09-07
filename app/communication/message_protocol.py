@@ -11,6 +11,7 @@ class SocketMessageType(str, enum.Enum):
     MoveRobot = "MoveRobot"
     StopRobot = "StopRobot"
     RobotArrived = "RobotArrived"
+    ChargeRobot = "ChargeRobot"
 
 
 def format_message(
