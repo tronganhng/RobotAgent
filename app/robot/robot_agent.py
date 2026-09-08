@@ -121,6 +121,25 @@ class RobotAgent:
             if self.robot_state["Status"] == RobotStatus.DoingTask.value:
                 self.robot_state["Status"] = RobotStatus.Idle.value
 
+    async def _execute_charge(self) -> None:
+        """Executes charging sequence asynchronously."""
+        try:
+            self.robot_state["Status"] = RobotStatus.DoingTask.value
+            success = await self.navigation.go_charge()
+            if success:
+                logger.info("Robot successfully docked and started charging.")
+                self.robot_state["Status"] = RobotStatus.Charging.value
+            else:
+                self.robot_state["Status"] = RobotStatus.Idle.value
+        except asyncio.CancelledError:
+            logger.info("Charging sequence was cancelled.")
+        except Exception as e:
+            logger.error(f"Error during charging sequence: {e}", exc_info=True)
+            self.robot_state["Status"] = RobotStatus.Error.value
+        finally:
+            if self.robot_state["Status"] == RobotStatus.DoingTask.value:
+                self.robot_state["Status"] = RobotStatus.Idle.value
+
     async def handle_message(self, raw_msg: str) -> None:
         """Parses and handles incoming JSON messages from the Fleet Backend."""
         try:
@@ -161,6 +180,14 @@ class RobotAgent:
                 self._current_move_task = asyncio.create_task(self._execute_move(x, y))
             else:
                 logger.warning(f"Unable to parse MoveRobot coordinates from payload: {payload}")
+
+        # Handle ChargeRobot command
+        elif msg_type in (SocketMessageType.ChargeRobot.value, "ChargeRobot"):
+            logger.info("Received ChargeRobot command from backend. Starting charging sequence...")
+            # Cancel existing task if running
+            if self._current_move_task and not self._current_move_task.done():
+                self._current_move_task.cancel()
+            self._current_move_task = asyncio.create_task(self._execute_charge())
 
         # Handle StopRobot command
         elif msg_type in (SocketMessageType.StopRobot.value, "StopRobot"):

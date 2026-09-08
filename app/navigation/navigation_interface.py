@@ -17,6 +17,14 @@ class NavigationInterface(ABC):
         pass
 
     @abstractmethod
+    async def go_charge(self) -> bool:
+        """
+        Navigates the robot to the charging station/dock and initiates charging.
+        Returns True if arrival and docking/charging started successfully, False otherwise.
+        """
+        pass
+
+    @abstractmethod
     async def cancel(self) -> None:
         """Cancels any current navigation goal."""
         pass
@@ -25,3 +33,4 @@ class NavigationInterface(ABC):
     def get_current_pose(self) -> Tuple[float, float, float]:
         """Returns the current estimated pose (x, y, rotation)."""
         pass
+

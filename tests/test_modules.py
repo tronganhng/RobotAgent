@@ -48,6 +48,12 @@ class TestModularComponents(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(success)
         self.assertEqual(nav.get_current_pose(), (5.0, 10.0, 1.57))
 
+    async def test_mock_navigation_go_charge(self):
+        nav = MockNavigation()
+        success = await nav.go_charge()
+        self.assertTrue(success)
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,6 +30,15 @@ class MockNavigation(NavigationInterface):
             return True
         except asyncio.CancelledError:
             logger.info("[MockNavigation] Navigation cancelled.")
+    async def go_charge(self) -> bool:
+        logger.info("[MockNavigation] Moving to charging dock and starting charge...")
+        try:
+            # Simulate navigation and docking delay
+            await asyncio.sleep(1.0)
+            logger.info("[MockNavigation] Successfully docked and charging.")
+            return True
+        except asyncio.CancelledError:
+            logger.info("[MockNavigation] Charging navigation cancelled.")
             return False
 
     async def cancel(self) -> None:

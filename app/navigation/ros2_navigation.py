@@ -26,6 +26,13 @@ class ROS2Navigation(NavigationInterface):
         # 3. Monitor navigation status asynchronously
         raise NotImplementedError("ROS 2 Nav2 navigation will be enabled on TurtleBot 4.")
 
+    async def go_charge(self) -> bool:
+        logger.info("[ROS2Navigation] Initiating docking/charging sequence...")
+        # TODO (TurtleBot 4 deployment):
+        # 1. Use dock action from turtlebot4_navigation / Nav2 dock action
+        # 2. Monitor docking status asynchronously
+        raise NotImplementedError("ROS 2 docking/charging will be enabled on TurtleBot 4.")
+
     async def cancel(self) -> None:
         logger.info("[ROS2Navigation] Cancelling active Nav2 goal...")
         # TODO: navigator.cancelTask()
