@@ -64,8 +64,7 @@ class RobotAgent:
         # logger.info(f"Sent [{message_type}] (RequestId: {message['RequestId']}): {raw_payload}")
 
     async def register_robot(self) -> None:
-        """Step 1: Send RegisterRobot request with the initial state to the Backend."""
-        logger.info("Step 1/3: Sending RegisterRobot request...")
+        logger.info("Step 1/3: RegisterRobot request")
         self.robot_state["RobotId"] = self.robot_id or ""
         await self.send_message(
             message_type=SocketMessageType.RegisterRobot,
@@ -73,8 +72,7 @@ class RobotAgent:
         )
 
     async def register_client(self, robot_id: str) -> None:
-        """Step 3: Send RegisterClient message with Payload: 'Robot'."""
-        logger.info(f"Step 3/3: Sending RegisterClient message for RobotId: '{robot_id}'...")
+        logger.info(f"Step 3/3: RegisterClient")
         await self.send_message(
             message_type=SocketMessageType.RegisterClient,
             payload="Robot",
@@ -161,7 +159,7 @@ class RobotAgent:
                 self.robot_id = extracted_id
                 self.robot_state["RobotId"] = self.robot_id
                 self._registration_event.set()
-                logger.info(f"Step 2/3: Received assigned RobotId: '{self.robot_id}' from backend.")
+                logger.info(f"Step 2/3: Received assigned RobotId: '{self.robot_id}'")
 
                 # Automatically trigger Step 3: RegisterClient with ClientType = Robot
                 if self.ws:
@@ -191,7 +189,7 @@ class RobotAgent:
 
         # Handle StopRobot command
         elif msg_type in (SocketMessageType.StopRobot.value, "StopRobot"):
-            logger.info("Received StopRobot command from backend.")
+            logger.info("StopRobot")
             await self.stop()
 
     async def publish_state(self) -> None:
