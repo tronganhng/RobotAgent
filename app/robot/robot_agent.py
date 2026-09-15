@@ -213,7 +213,7 @@ class RobotAgent:
                 except Exception as e:
                     logger.error(f"Error publishing robot state: {e}")
             
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.5)
 
     async def listen(self) -> None:
         """Listens for incoming messages until connection closes."""
