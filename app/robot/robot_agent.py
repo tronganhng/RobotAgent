@@ -64,21 +64,20 @@ class RobotAgent:
         # logger.info(f"Sent [{message_type}] (RequestId: {message['RequestId']}): {raw_payload}")
 
     async def register_robot(self) -> None:
-        logger.info("Step 1/3: RegisterRobot request")
+        logger.info("RegisterRobot request")
         self.robot_state["RobotId"] = self.robot_id or ""
         await self.send_message(
             message_type=SocketMessageType.RegisterRobot,
             payload=self.robot_state,
         )
 
-    async def register_client(self, robot_id: str) -> None:
-        logger.info(f"Step 3/3: RegisterClient")
+    async def register_client(self) -> None:
+        logger.info(f"RegisterClient")
         await self.send_message(
             message_type=SocketMessageType.RegisterClient,
             payload="Robot",
         )
         self.is_client_registered = True
-        logger.info(f"Successfully sent RegisterClient (Payload: 'Robot', RobotId: {robot_id}).")
 
     def _extract_robot_id(self, data: Dict[str, Any]) -> Optional[str]:
         """Extracts RobotId from data or payload with case-insensitivity."""
@@ -159,11 +158,11 @@ class RobotAgent:
                 self.robot_id = extracted_id
                 self.robot_state["RobotId"] = self.robot_id
                 self._registration_event.set()
-                logger.info(f"Step 2/3: Received assigned RobotId: '{self.robot_id}'")
+                logger.info(f"Received assigned RobotId: '{self.robot_id}'")
 
                 # Automatically trigger Step 3: RegisterClient with ClientType = Robot
-                if self.ws:
-                    await self.register_client(self.robot_id)
+                # if self.ws:
+                #     await self.register_client(self.robot_id)
 
         # Handle MoveRobot command
         if msg_type in (SocketMessageType.MoveRobot.value, "MoveRobot"):
@@ -191,6 +190,9 @@ class RobotAgent:
         elif msg_type in (SocketMessageType.StopRobot.value, "StopRobot"):
             logger.info("StopRobot")
             await self.stop()
+            
+        elif msg_type in (SocketMessageType.SetSystemMode.value, "SetSystemMode"):
+            await self.register_robot()
 
     async def publish_state(self) -> None:
         """Continuously publishes the robot state to the backend."""
@@ -237,8 +239,7 @@ class RobotAgent:
                 self.ws = websocket
                 logger.info("Connected to Fleet Backend.")
 
-                # Step 1: Send RegisterRobot
-                await self.register_robot()
+                await self.register_client()
 
                 # Start listener task and state publisher task
                 listener_task = asyncio.create_task(self.listen())
