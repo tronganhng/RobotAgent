@@ -13,7 +13,7 @@ from nav2_simple_commander.robot_navigator import (
 def main():
     rclpy.init()
 
-    navigator = BasicNavigator()
+    navigator = BasicNavigator(namespace='robot3')
 
     print("Waiting for Nav2...")
     navigator.waitUntilNav2Active()
