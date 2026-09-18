@@ -19,9 +19,9 @@ def main():
     navigator.waitUntilNav2Active()
 
     # Goal position trong map
-    x = -3.0
-    y = 0.0
-    yaw = 0.0
+    x = -3.018
+    y = -0.2792
+    yaw = -2.564
 
     goal = PoseStamped()
 
