@@ -19,7 +19,7 @@ def main():
     navigator.waitUntilNav2Active()
 
     # Goal position trong map
-    x = 1.0
+    x = -3.0
     y = 0.0
     yaw = 0.0
 
