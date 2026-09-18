@@ -2,6 +2,11 @@
 
 from app.navigation.navigation_interface import NavigationInterface
 from app.navigation.mock_navigation import MockNavigation
-from app.navigation.ros2_navigation import ROS2Navigation
 
-__all__ = ["NavigationInterface", "MockNavigation", "ROS2Navigation"]
+__all__ = ["NavigationInterface", "MockNavigation"]
+
+try:
+    from app.navigation.ros2_navigation import ROS2Navigation
+    __all__.append("ROS2Navigation")
+except (ImportError, ModuleNotFoundError):
+    pass

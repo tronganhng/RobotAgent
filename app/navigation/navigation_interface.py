@@ -25,12 +25,19 @@ class NavigationInterface(ABC):
         pass
 
     @abstractmethod
+    async def undock(self) -> bool:
+        """
+        Undocks the robot from the charging station/dock.
+        Returns True if undocking completed successfully, False otherwise.
+        """
+        pass
+
+    @abstractmethod
     async def cancel(self) -> None:
-        """Cancels any current navigation goal."""
+        """Cancels any current navigation or motion goal."""
         pass
 
     @abstractmethod
     def get_current_pose(self) -> Tuple[float, float, float]:
         """Returns the current estimated pose (x, y, rotation)."""
         pass
-

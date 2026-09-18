@@ -53,7 +53,12 @@ class TestModularComponents(unittest.IsolatedAsyncioTestCase):
         success = await nav.go_charge()
         self.assertTrue(success)
 
+    async def test_mock_navigation_undock(self):
+        nav = MockNavigation()
+        success = await nav.undock()
+        self.assertTrue(success)
 
 
 if __name__ == "__main__":
     unittest.main()
+

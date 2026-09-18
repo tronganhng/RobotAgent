@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Tuple
+from typing import Optional, Tuple
 from app.navigation.navigation_interface import NavigationInterface
 
 logger = logging.getLogger("RobotAgent")
@@ -16,7 +16,7 @@ class MockNavigation(NavigationInterface):
         self.y: float = 0.0
         self.rotation: float = 0.0
         self.speed: float = speed
-        self._nav_task: asyncio.Task | None = None
+        self._nav_task: Optional[asyncio.Task] = None
 
     async def navigate_to(self, x: float, y: float, rotation: float = 0.0) -> bool:
         logger.info(f"[MockNavigation] Navigating to ({x}, {y}, rot={rotation})...")
@@ -30,6 +30,8 @@ class MockNavigation(NavigationInterface):
             return True
         except asyncio.CancelledError:
             logger.info("[MockNavigation] Navigation cancelled.")
+            return False
+
     async def go_charge(self) -> bool:
         logger.info("[MockNavigation] Moving to charging dock and starting charge...")
         try:
@@ -39,6 +41,16 @@ class MockNavigation(NavigationInterface):
             return True
         except asyncio.CancelledError:
             logger.info("[MockNavigation] Charging navigation cancelled.")
+            return False
+
+    async def undock(self) -> bool:
+        logger.info("[MockNavigation] Undocking from charger...")
+        try:
+            await asyncio.sleep(1.0)
+            logger.info("[MockNavigation] Successfully undocked.")
+            return True
+        except asyncio.CancelledError:
+            logger.info("[MockNavigation] Undocking cancelled.")
             return False
 
     async def cancel(self) -> None:
