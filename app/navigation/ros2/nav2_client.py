@@ -8,6 +8,7 @@ from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 
 from app.navigation.ros2.quaternion import yaw_to_quaternion
+from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE, RobotTopics
 
 logger = logging.getLogger("RobotAgent")
 
@@ -16,22 +17,28 @@ class Nav2Client:
     """
     ActionClient wrapper for Nav2 NavigateToPose action on TurtleBot 4.
 
-    Endpoint:
-        /robot3/navigate_to_pose
+    The robot namespace is configurable and defaults to ``robot3``.
     """
 
-    def __init__(self, node) -> None:
+    def __init__(
+        self,
+        node,
+        robot_namespace: str = DEFAULT_ROBOT_NAMESPACE,
+    ) -> None:
         if node is None:
             raise ValueError("Nav2Client requires an rclpy Node.")
 
         self.node = node
+        self.topics = RobotTopics(robot_namespace)
         self._action_client = ActionClient(
             self.node,
             NavigateToPose,
-            "/robot3/navigate_to_pose",
+            self.topics.navigate_to_pose,
         )
         self._goal_handle = None
-        logger.info("[Nav2Client] Initialized on /robot3/navigate_to_pose.")
+        logger.info(
+            "[Nav2Client] Initialized on %s.", self.topics.navigate_to_pose
+        )
 
     async def navigate_to(
         self,

@@ -8,6 +8,8 @@ from irobot_create_msgs.msg import DockStatus
 from rclpy.action import ActionClient
 from rclpy.qos import qos_profile_sensor_data
 
+from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE, RobotTopics
+
 logger = logging.getLogger("RobotAgent")
 
 
@@ -15,34 +17,36 @@ class DockingClient:
     """
     ActionClient wrapper for TurtleBot 4 / iRobot Create 3 Dock and Undock actions.
 
-    Endpoints:
-        Dock:   /robot3/dock
-        Undock: /robot3/undock
-        Status: /robot3/dock_status
+    The robot namespace is configurable and defaults to ``robot3``.
     """
 
-    def __init__(self, node) -> None:
+    def __init__(
+        self,
+        node,
+        robot_namespace: str = DEFAULT_ROBOT_NAMESPACE,
+    ) -> None:
         if node is None:
             raise ValueError("DockingClient requires an rclpy Node.")
 
         self.node = node
+        self.topics = RobotTopics(robot_namespace)
 
         self._dock_client = ActionClient(
             self.node,
             Dock,
-            "/robot3/dock",
+            self.topics.dock,
         )
 
         self._undock_client = ActionClient(
             self.node,
             Undock,
-            "/robot3/undock",
+            self.topics.undock,
         )
 
         self._is_docked: Optional[bool] = None
         self._dock_status_subscription = self.node.create_subscription(
             DockStatus,
-            "/robot3/dock_status",
+            self.topics.dock_status,
             self._dock_status_callback,
             qos_profile_sensor_data,
         )
@@ -50,7 +54,11 @@ class DockingClient:
         self._dock_goal_handle = None
         self._undock_goal_handle = None
 
-        logger.info("[DockingClient] Initialized on /robot3/dock and /robot3/undock.")
+        logger.info(
+            "[DockingClient] Initialized on %s and %s.",
+            self.topics.dock,
+            self.topics.undock,
+        )
 
     async def dock(self) -> bool:
         """

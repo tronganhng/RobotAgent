@@ -2,6 +2,7 @@ import logging
 from typing import Optional, Tuple
 
 from app.navigation.navigation_interface import NavigationInterface
+from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE
 
 logger = logging.getLogger("RobotAgent")
 
@@ -10,9 +11,9 @@ class ROS2Navigation(NavigationInterface):
     """
     ROS 2 / Nav2 navigation facade for TurtleBot 4.
     Acts as a thin orchestrator delegating to specialized ROS2 sub-components:
-      - Nav2Client: NavigateToPose ActionClient (/robot3/navigate_to_pose)
-      - DockingClient: Dock and Undock ActionClients (/robot3/dock, /robot3/undock)
-      - Odometry: Odometry subscriber (/robot3/odom)
+    - Nav2Client: NavigateToPose ActionClient
+    - DockingClient: Dock and Undock ActionClients
+    - Odometry: Odometry subscriber
 
     The ROS node lifecycle remains owned by the application layer.
     """
@@ -23,8 +24,10 @@ class ROS2Navigation(NavigationInterface):
         nav2_client=None,
         docking_client=None,
         odometry=None,
+        robot_namespace: str = DEFAULT_ROBOT_NAMESPACE,
     ) -> None:
         self.node = node
+        self.robot_namespace = robot_namespace
 
         if nav2_client is not None and docking_client is not None and odometry is not None:
             self._nav2_client = nav2_client
@@ -35,9 +38,13 @@ class ROS2Navigation(NavigationInterface):
             from app.navigation.ros2.nav2_client import Nav2Client
             from app.navigation.ros2.odometry import Odometry
 
-            self._nav2_client = nav2_client or Nav2Client(self.node)
-            self._docking_client = docking_client or DockingClient(self.node)
-            self._odometry = odometry or Odometry(self.node)
+            self._nav2_client = nav2_client or Nav2Client(
+                self.node, robot_namespace
+            )
+            self._docking_client = docking_client or DockingClient(
+                self.node, robot_namespace
+            )
+            self._odometry = odometry or Odometry(self.node, robot_namespace)
         else:
             raise ValueError(
                 "ROS2Navigation requires an rclpy Node or injected sub-components."

@@ -5,6 +5,7 @@ from nav_msgs.msg import Odometry as OdometryMsg
 from rclpy.qos import qos_profile_sensor_data
 
 from app.navigation.ros2.quaternion import quaternion_to_yaw
+from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE, RobotTopics
 
 logger = logging.getLogger("RobotAgent")
 
@@ -13,15 +14,19 @@ class Odometry:
     """
     Subscribes to odometry topic and maintains the robot's current 2D pose (x, y, yaw).
 
-    Topic:
-        /robot3/odom
+    The robot namespace is configurable and defaults to ``robot3``.
     """
 
-    def __init__(self, node) -> None:
+    def __init__(
+        self,
+        node,
+        robot_namespace: str = DEFAULT_ROBOT_NAMESPACE,
+    ) -> None:
         if node is None:
             raise ValueError("Odometry requires an rclpy Node.")
 
         self.node = node
+        self.topics = RobotTopics(robot_namespace)
         self.x: float = 0.0
         self.y: float = 0.0
         self.rotation: float = 0.0
@@ -29,11 +34,11 @@ class Odometry:
 
         self._odom_subscription = self.node.create_subscription(
             OdometryMsg,
-            "/robot3/odom",
+            self.topics.odometry,
             self._odom_callback,
             qos_profile_sensor_data,
         )
-        logger.info("[Odometry] Subscribed to /robot3/odom.")
+        logger.info("[Odometry] Subscribed to %s.", self.topics.odometry)
 
     def _odom_callback(self, msg: OdometryMsg) -> None:
         pose = msg.pose.pose
