@@ -202,10 +202,11 @@ class RobotAgent:
             if self.ws and self.is_client_registered:
                 try:
                     # Update pose from navigation
-                    x, y, rotation = self.navigation.get_current_pose()
+                    x, y, rotation, battery = self.navigation.get_current_pose()
                     self.robot_state["X"] = x
                     self.robot_state["Y"] = y
                     self.robot_state["Rotation"] = rotation
+                    self.robot_state["Battery"] = battery
                     self.robot_state["LastHeartbeat"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                     
                     await self.send_message(

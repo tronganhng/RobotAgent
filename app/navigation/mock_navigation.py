@@ -15,6 +15,7 @@ class MockNavigation(NavigationInterface):
         self.x: float = 0.0
         self.y: float = 0.0
         self.rotation: float = 0.0
+        self.battery: float = 100.0
         self.speed: float = speed
         self._nav_task: Optional[asyncio.Task] = None
 
@@ -58,5 +59,5 @@ class MockNavigation(NavigationInterface):
             self._nav_task.cancel()
             logger.info("[MockNavigation] Cancel request sent.")
 
-    def get_current_pose(self) -> Tuple[float, float, float]:
-        return self.x, self.y, self.rotation
+    def get_current_pose(self) -> Tuple[float, float, float, float]:
+        return self.x, self.y, self.rotation, self.battery

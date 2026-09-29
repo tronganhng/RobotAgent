@@ -75,6 +75,6 @@ class ROS2Navigation(NavigationInterface):
         if hasattr(self._docking_client, "cancel"):
             await self._docking_client.cancel()
 
-    def get_current_pose(self) -> Tuple[float, float, float]:
-        """Returns the current estimated pose (x, y, rotation)."""
+    def get_current_pose(self) -> Tuple[float, float, float, float]:
+        """Returns the current estimated pose and battery (x, y, rotation, battery)."""
         return self._odometry.get_current_pose()

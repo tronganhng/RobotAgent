@@ -6,7 +6,7 @@ DEFAULT_ROBOT_NAMESPACE = "robot3"
 
 @dataclass(frozen=True)
 class RobotTopics:
-    """ROS 2 action and topic names for one TurtleBot namespace."""
+    """ROS 2 action and topic names for one robot namespace."""
 
     namespace: str = DEFAULT_ROBOT_NAMESPACE
 
@@ -35,3 +35,7 @@ class RobotTopics:
     @property
     def odometry(self) -> str:
         return f"/{self.namespace}/odom"
+
+    @property
+    def battery_state(self) -> str:
+        return f"/{self.namespace}/battery_state"

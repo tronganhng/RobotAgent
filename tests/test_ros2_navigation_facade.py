@@ -17,7 +17,7 @@ class TestROS2NavigationFacade(unittest.IsolatedAsyncioTestCase):
         self.mock_docking.cancel = AsyncMock()
 
         self.mock_odometry = MagicMock()
-        self.mock_odometry.get_current_pose = MagicMock(return_value=(1.5, 2.5, 0.78))
+        self.mock_odometry.get_current_pose = MagicMock(return_value=(1.5, 2.5, 0.78, 75.0))
 
         self.facade = ROS2Navigation(
             nav2_client=self.mock_nav2,
@@ -54,7 +54,7 @@ class TestROS2NavigationFacade(unittest.IsolatedAsyncioTestCase):
 
     def test_get_current_pose_delegation(self):
         pose = self.facade.get_current_pose()
-        self.assertEqual(pose, (1.5, 2.5, 0.78))
+        self.assertEqual(pose, (1.5, 2.5, 0.78, 75.0))
         self.mock_odometry.get_current_pose.assert_called_once()
 
 
