@@ -14,6 +14,7 @@ from app.robot.robot_state import build_initial_robot_state, RobotStatus
 from app.handlers.message_handler import extract_robot_id, parse_move_coordinates
 from app.navigation.navigation_interface import NavigationInterface
 from app.navigation.mock_navigation import MockNavigation
+from app.navigation.ros2_navigation import ROS2Navigation
 
 
 class RobotAgent:
@@ -31,9 +32,11 @@ class RobotAgent:
         self,
         server_url: str = DEFAULT_SERVER_URL,
         navigation: Optional[NavigationInterface] = None,
+        node: Optional[Any] = None,
     ) -> None:
         self.server_url: str = server_url
-        self.navigation: NavigationInterface = navigation or MockNavigation()
+        self.node = node
+        self.navigation: NavigationInterface = navigation or self._resolve_default_navigation()
         self.robot_id: Optional[str] = None
         self.is_client_registered: bool = False
         self.ws: Optional[Any] = None
@@ -41,6 +44,15 @@ class RobotAgent:
         self._current_move_task: Optional[asyncio.Task] = None
         self._state_publisher_task: Optional[asyncio.Task] = None
         self.robot_state: Dict[str, Any] = build_initial_robot_state()
+
+    def _resolve_default_navigation(self) -> NavigationInterface:
+        """Prefer ROS2 navigation when a ROS2 node is available; otherwise keep mock navigation for tests."""
+        if self.node is not None:
+            try:
+                return ROS2Navigation(node=self.node)
+            except ValueError:
+                logger.warning("ROS2Navigation requires a valid ROS2 node; falling back to MockNavigation.")
+        return MockNavigation()
 
     async def send_message(
         self,
@@ -152,7 +164,11 @@ class RobotAgent:
         logger.info(f"Received message [{msg_type}]: {raw_msg}")
 
         # Check for RobotId assignment if not yet received (during registration flow)
-        if msg_type in (SocketMessageType.ServerResponse.value, "ServerResponse"):
+        if msg_type in (
+            SocketMessageType.ServerResponse.value,
+            "ServerResponse",
+            "RegisterRobotResponse",
+        ):
             extracted_id = self._extract_robot_id(data)
             if extracted_id:
                 self.robot_id = extracted_id
@@ -240,11 +256,14 @@ class RobotAgent:
                 self.ws = websocket
                 logger.info("Connected to Fleet Backend.")
 
-                await self.register_client()
-
-                # Start listener task and state publisher task
+                # Start listener and publisher before registration so the backend can
+                # respond with the assigned RobotId and we can publish state immediately.
                 listener_task = asyncio.create_task(self.listen())
                 self._state_publisher_task = asyncio.create_task(self.publish_state())
+
+                await self.register_robot()
+                await asyncio.wait_for(self._registration_event.wait(), timeout=10.0)
+                await self.register_client()
 
                 try:
                     await websocket.wait_closed()
