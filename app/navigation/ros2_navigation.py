@@ -77,4 +77,9 @@ class ROS2Navigation(NavigationInterface):
 
     def get_current_pose(self) -> Tuple[float, float, float, float]:
         """Returns the current estimated pose and battery (x, y, rotation, battery)."""
-        return self._odometry.get_current_pose()
+        pose = self._odometry.get_current_pose()
+        logger.info(
+            "[ROS2Navigation] Current pose: x=%s, y=%s, rotation=%s, battery=%s",
+            *pose,
+        )
+        return pose
