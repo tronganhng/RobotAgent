@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import threading
 
 from app.config import DEFAULT_SERVER_URL, logger
 from app.robot.robot_agent import RobotAgent
@@ -10,6 +11,7 @@ async def main() -> None:
 
     try:
         import rclpy
+        from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
     except ImportError:
         logger.info("ROS2 runtime not available; using mock navigation.")
@@ -21,10 +23,16 @@ async def main() -> None:
         rclpy.init()
 
     node = Node("robot_agent")
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
     try:
+        executor_thread.start()
         agent = RobotAgent(server_url=server_url, node=node)
         await agent.run()
     finally:
+        executor.shutdown()
+        executor_thread.join()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
