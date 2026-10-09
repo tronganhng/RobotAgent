@@ -37,12 +37,12 @@ class GoToPosition(Node):
         self.action_client = ActionClient(
             self,
             NavigateToPose,
-            '/robot3/navigate_to_pose'
+            '/robot1/navigate_to_pose'
         )
 
         self.get_logger().info(
             'Đang chờ Nav2 action '
-            '/robot3/navigate_to_pose...'
+            '/robot1/navigate_to_pose...'
         )
 
         if not self.action_client.wait_for_server(
@@ -52,7 +52,7 @@ class GoToPosition(Node):
                 'Không tìm thấy Nav2 action server!'
             )
             raise RuntimeError(
-                '/robot3/navigate_to_pose không available'
+                '/robot1/navigate_to_pose không available'
             )
 
         self.get_logger().info(
