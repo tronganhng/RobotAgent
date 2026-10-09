@@ -55,7 +55,7 @@ class Nav2Client:
         )
 
         # Wait for Nav2 action server
-        if not self._action_client.wait_for_server(timeout_sec=5.0):
+        if not self._action_client.wait_for_server(timeout_sec=15.0):
             logger.error("[Nav2Client] Nav2 action server is not available.")
             return False
 
