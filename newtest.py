@@ -20,8 +20,8 @@ class GoToPosition(Node):
         # Goal configuration
         # ==========================================
 
-        self.x = -3
-        self.y = 0
+        self.x = -3.0
+        self.y = 0.0
         self.yaw = -2.564
 
         self.get_logger().info(
