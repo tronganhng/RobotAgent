@@ -67,7 +67,7 @@ class DockingClient:
         """
         logger.info("[DockingClient] Starting docking sequence...")
 
-        if not self._dock_client.wait_for_server(timeout_sec=5.0):
+        if not self._dock_client.wait_for_server(timeout_sec=15.0):
             logger.error("[DockingClient] Dock action server is not available.")
             return False
 
@@ -118,7 +118,7 @@ class DockingClient:
         """
         logger.info("[DockingClient] Starting undocking sequence...")
 
-        if not self._undock_client.wait_for_server(timeout_sec=5.0):
+        if not self._undock_client.wait_for_server(timeout_sec=15.0):
             logger.error("[DockingClient] Undock action server is not available.")
             return False
 
