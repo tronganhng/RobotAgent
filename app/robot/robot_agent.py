@@ -164,21 +164,13 @@ class RobotAgent:
         logger.info(f"Received message [{msg_type}]: {raw_msg}")
 
         # Check for RobotId assignment if not yet received (during registration flow)
-        if msg_type in (
-            SocketMessageType.ServerResponse.value,
-            "ServerResponse",
-            "RegisterRobotResponse",
-        ):
+        if msg_type in (SocketMessageType.ServerResponse.value, "ServerResponse"):
             extracted_id = self._extract_robot_id(data)
             if extracted_id:
                 self.robot_id = extracted_id
                 self.robot_state["RobotId"] = self.robot_id
                 self._registration_event.set()
                 logger.info(f"Received assigned RobotId: '{self.robot_id}'")
-
-                # Automatically trigger Step 3: RegisterClient with ClientType = Robot
-                # if self.ws:
-                #     await self.register_client(self.robot_id)
 
         # Handle MoveRobot command
         if msg_type in (SocketMessageType.MoveRobot.value, "MoveRobot"):
