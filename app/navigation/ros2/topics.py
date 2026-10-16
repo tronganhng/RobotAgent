@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 
-DEFAULT_ROBOT_NAMESPACE = "robot1"
+DEFAULT_ROBOT_NAMESPACE = "robot3"
 
 
 @dataclass(frozen=True)
