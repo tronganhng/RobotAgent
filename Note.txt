@@ -1,0 +1,7 @@
+sudo apt update && sudo apt install python3.12-venv
+
+python3 -m venv --system-site-packages .venv
+
+source .venv/bin/activate
+
+python -m pip install websockets
