@@ -36,6 +36,9 @@ class Nav2Client:
             self.topics.navigate_to_pose,
         )
         self._goal_handle = None
+        self._send_future = None
+        self._result_future = None
+        self._cancel_lock = asyncio.Lock()
         logger.info(
             "[Nav2Client] Initialized on %s.", self.topics.navigate_to_pose
         )
@@ -50,6 +53,17 @@ class Nav2Client:
         Sends a NavigateToPose goal and waits asynchronously for result.
         Returns True if successful, False otherwise.
         """
+        if self._send_future is not None or self._goal_handle is not None:
+            raise RuntimeError("Previous Nav2 goal must finish or be canceled first.")
+        try:
+            return await self._navigate_to(x, y, rotation)
+        except asyncio.CancelledError:
+            # Task cancellation does not cancel a ROS action. Keep ownership
+            # until even a pending goal response has been resolved and stopped.
+            await self.cancel()
+            raise
+
+    async def _navigate_to(self, x: float, y: float, rotation: float) -> bool:
         logger.info(
             f"[Nav2Client] Sending Nav2 goal: x={x:.3f}, y={y:.3f}, yaw={rotation:.3f}"
         )
@@ -81,16 +95,20 @@ class Nav2Client:
             feedback_callback=self._feedback_callback,
         )
 
+        self._send_future = future
+
         while not future.done():
             await asyncio.sleep(0.05)
 
         try:
             goal_handle = future.result()
         except Exception as exc:
+            self._send_future = None
             logger.exception("[Nav2Client] Failed to send Nav2 goal: %s", exc)
             return False
 
-        if not goal_handle.accepted:
+        self._send_future = None
+        if goal_handle is None or not goal_handle.accepted:
             logger.error("[Nav2Client] Nav2 rejected goal.")
             return False
 
@@ -99,6 +117,7 @@ class Nav2Client:
 
         # Wait for result
         result_future = goal_handle.get_result_async()
+        self._result_future = result_future
         while not result_future.done():
             await asyncio.sleep(0.05)
 
@@ -106,11 +125,12 @@ class Nav2Client:
             result = result_future.result()
         except Exception as exc:
             logger.exception("[Nav2Client] Failed to get navigation result: %s", exc)
-            self._goal_handle = None
+            # Keep the handle so a subsequent stop can still cancel motion.
             return False
 
         status = result.status
         self._goal_handle = None
+        self._result_future = None
 
         if status == GoalStatus.STATUS_SUCCEEDED:
             logger.info("[Nav2Client] Robot reached destination.")
@@ -134,19 +154,51 @@ class Nav2Client:
         )
 
     async def cancel(self) -> None:
-        """Cancels active navigation goal if running."""
-        goal_handle = self._goal_handle
-        if goal_handle is None:
-            logger.info("[Nav2Client] No active navigation goal to cancel.")
+        """Resolve pending acceptance, cancel, and confirm the goal has ended.
+
+        On timeout or failure, retain ownership so callers can retry and must
+        not start replacement motion under the assumption that it stopped.
+        """
+        async with self._cancel_lock:
+            await asyncio.wait_for(self._cancel_goal(), timeout=15.0)
+
+    async def _cancel_goal(self) -> None:
+        if self._send_future is not None:
+            while not self._send_future.done():
+                await asyncio.sleep(0.05)
+            handle = self._send_future.result()
+            self._send_future = None
+            if handle is not None and handle.accepted:
+                self._goal_handle = handle
+
+        handle = self._goal_handle
+        if handle is None:
             return
 
-        logger.info("[Nav2Client] Cancelling active Nav2 goal...")
-        try:
-            future = goal_handle.cancel_goal_async()
-            while not future.done():
+        if self._result_future is None:
+            self._result_future = handle.get_result_async()
+        result_future = self._result_future
+
+        if not result_future.done():
+            logger.info("[Nav2Client] Cancelling active Nav2 goal...")
+            cancel_future = handle.cancel_goal_async()
+            while not cancel_future.done():
                 await asyncio.sleep(0.05)
-            logger.info("[Nav2Client] Navigation cancel request sent.")
-        except Exception as exc:
-            logger.exception(f"[Nav2Client] Failed to cancel navigation: {exc}")
-        finally:
-            self._goal_handle = None
+            response = cancel_future.result()
+            # The goal may have finished naturally while cancellation raced it.
+            if not response.goals_canceling and not result_future.done():
+                raise RuntimeError("Nav2 did not accept the cancellation request.")
+
+        while not result_future.done():
+            await asyncio.sleep(0.05)
+        result = result_future.result()
+        if result is None or result.status not in (
+            GoalStatus.STATUS_SUCCEEDED,
+            GoalStatus.STATUS_CANCELED,
+            GoalStatus.STATUS_ABORTED,
+        ):
+            raise RuntimeError("Nav2 goal termination could not be confirmed.")
+
+        self._goal_handle = None
+        self._result_future = None
+        logger.info("[Nav2Client] Previous Nav2 goal has ended.")

@@ -95,15 +95,24 @@ class RobotAgent:
         """Extracts RobotId from data or payload with case-insensitivity."""
         return extract_robot_id(data)
 
+    async def _cancel_current_motion(self) -> None:
+        """Finish cancellation before allowing another motion command."""
+        task = self._current_move_task
+        try:
+            if task is not None and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            await self.navigation.cancel()
+        except Exception:
+            self.robot_state["Status"] = RobotStatus.Error.value
+            raise
+        self._current_move_task = None
+
     async def stop(self) -> None:
         """Stops any active navigation task and commands navigation interface to cancel."""
         logger.info("Stopping robot navigation...")
-        if self._current_move_task and not self._current_move_task.done():
-            self._current_move_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._current_move_task
-            self._current_move_task = None
-        await self.navigation.cancel()
+        await self._cancel_current_motion()
         self.robot_state["Status"] = RobotStatus.Idle.value
         logger.info("Robot stopped successfully.")
 
@@ -180,8 +189,7 @@ class RobotAgent:
                 x, y = coords
                 logger.info(f"Received MoveRobot command -> target: ({x}, {y}). Starting navigation...")
                 # Cancel existing movement task if running
-                if self._current_move_task and not self._current_move_task.done():
-                    self._current_move_task.cancel()
+                await self._cancel_current_motion()
                 self._current_move_task = asyncio.create_task(self._execute_move(x, y))
             else:
                 logger.warning(f"Unable to parse MoveRobot coordinates from payload: {payload}")
@@ -190,8 +198,7 @@ class RobotAgent:
         elif msg_type in (SocketMessageType.ChargeRobot.value, "ChargeRobot"):
             logger.info("Received ChargeRobot command from backend. Starting charging sequence...")
             # Cancel existing task if running
-            if self._current_move_task and not self._current_move_task.done():
-                self._current_move_task.cancel()
+            await self._cancel_current_motion()
             self._current_move_task = asyncio.create_task(self._execute_charge())
 
         # Handle StopRobot command
@@ -268,8 +275,7 @@ class RobotAgent:
                     listener_task.cancel()
                     if self._state_publisher_task:
                         self._state_publisher_task.cancel()
-                    if self._current_move_task and not self._current_move_task.done():
-                        self._current_move_task.cancel()
+                    await self._cancel_current_motion()
                     with contextlib.suppress(asyncio.CancelledError):
                         await listener_task
                     if self._state_publisher_task:
