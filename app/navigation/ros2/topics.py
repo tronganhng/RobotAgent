@@ -37,5 +37,9 @@ class RobotTopics:
         return f"/{self.namespace}/odom"
 
     @property
+    def amcl_pose(self) -> str:
+        return f"/{self.namespace}/amcl_pose"
+
+    @property
     def battery_state(self) -> str:
         return f"/{self.namespace}/battery_state"

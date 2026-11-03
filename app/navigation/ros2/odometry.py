@@ -2,7 +2,7 @@ import logging
 import math
 from typing import Tuple
 
-from nav_msgs.msg import Odometry as OdometryMsg
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from sensor_msgs.msg import BatteryState
 from rclpy.qos import qos_profile_sensor_data
 
@@ -14,7 +14,10 @@ logger = logging.getLogger("RobotAgent")
 
 class Odometry:
     """
-    Subscribes to odometry and battery topics and maintains the robot's current state.
+    Maintains the robot's map pose from AMCL and battery state.
+
+    The historical class name is retained for callers; pose is never read
+    directly from odom, whose coordinates differ from Nav2 map goals.
 
     The robot namespace is configurable and defaults to ``robot3``.
     """
@@ -36,10 +39,10 @@ class Odometry:
         self._odom_received: bool = False
         self._battery_received: bool = False
 
-        self._odom_subscription = self.node.create_subscription(
-            OdometryMsg,
-            self.topics.odometry,
-            self._odom_callback,
+        self._pose_subscription = self.node.create_subscription(
+            PoseWithCovarianceStamped,
+            self.topics.amcl_pose,
+            self._amcl_pose_callback,
             qos_profile_sensor_data,
         )
         self._battery_subscription = self.node.create_subscription(
@@ -48,10 +51,13 @@ class Odometry:
             self._battery_callback,
             qos_profile_sensor_data,
         )
-        logger.info("[Odometry] Subscribed to %s.", self.topics.odometry)
+        logger.info("[Odometry] Subscribed to %s.", self.topics.amcl_pose)
         logger.info("[Odometry] Subscribed to %s.", self.topics.battery_state)
 
-    def _odom_callback(self, msg: OdometryMsg) -> None:
+    def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
+        if msg.header.frame_id != "map":
+            logger.warning("[Odometry] Ignoring pose in frame %r; expected map.", msg.header.frame_id)
+            return
         pose = msg.pose.pose
         self.x = pose.position.x
         self.y = pose.position.y
@@ -66,6 +72,7 @@ class Odometry:
 
     @property
     def odom_received(self) -> bool:
+        """Compatibility flag: True once an AMCL map pose has arrived."""
         return self._odom_received
 
     def _battery_callback(self, msg: BatteryState) -> None:
@@ -85,5 +92,7 @@ class Odometry:
         return self._battery_received
 
     def get_current_pose(self) -> Tuple[float, float, float, float]:
-        """Returns (x, y, rotation, battery), with battery in percent."""
+        """Returns map (x, y), yaw in radians, and battery in percent."""
+        if not self._odom_received:
+            raise RuntimeError("No AMCL pose in map frame has been received yet.")
         return self.x, self.y, self.rotation, self.battery

@@ -1,6 +1,6 @@
 import logging
 
-DEFAULT_SERVER_URL = "ws://10.11.57.194:5055/ws"
+DEFAULT_SERVER_URL = "ws://10.11.57.157:5055/ws"
 
 def setup_logging(level: int = logging.INFO) -> logging.Logger:
     """Configures and returns the main application logger."""
