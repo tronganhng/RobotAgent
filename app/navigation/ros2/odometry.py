@@ -4,7 +4,13 @@ from typing import Tuple
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from sensor_msgs.msg import BatteryState
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (
+    QoSDurabilityPolicy,
+    QoSHistoryPolicy,
+    QoSProfile,
+    QoSReliabilityPolicy,
+    qos_profile_sensor_data,
+)
 
 from app.navigation.ros2.quaternion import quaternion_to_yaw
 from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE, RobotTopics
@@ -39,11 +45,19 @@ class Odometry:
         self._odom_received: bool = False
         self._battery_received: bool = False
 
+        # AMCL retains its latest pose; receive it even when this agent starts
+        # after localization and the robot has not moved to trigger an update.
+        pose_qos = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self._pose_subscription = self.node.create_subscription(
             PoseWithCovarianceStamped,
             self.topics.amcl_pose,
             self._amcl_pose_callback,
-            qos_profile_sensor_data,
+            pose_qos,
         )
         self._battery_subscription = self.node.create_subscription(
             BatteryState,
