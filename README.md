@@ -84,6 +84,22 @@ Make sure the Fleet Backend is running at `ws://localhost:5055/ws`.
 .venv\Scripts\python.exe robot_agent.py
 ```
 
+Set the ROS namespace separately for each robot (defaults to `robot3`):
+
+```bash
+# On robot 1
+python -m app.main ws://10.11.57.157:5055/ws --robot-namespace robot1
+
+# On robot 2
+python -m app.main ws://10.11.57.157:5055/ws --robot-namespace robot2
+```
+
+The namespace must match the robot's existing ROS topics and actions. This option
+selects the endpoints the agent connects to; it does not rename the robot's ROS
+stack. Leading/trailing slashes are removed, and nested namespaces such as
+`warehouse/robot1` are supported. The backend assigns `RobotId` independently.
+The root wrapper accepts the same arguments.
+
 ---
 
 ## 4. Running Unit & Integration Tests

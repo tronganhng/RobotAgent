@@ -15,6 +15,7 @@ from app.handlers.message_handler import extract_robot_id, parse_move_coordinate
 from app.navigation.navigation_interface import NavigationInterface
 from app.navigation.mock_navigation import MockNavigation
 from app.navigation.ros2_navigation import ROS2Navigation
+from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE, RobotTopics
 
 
 class RobotAgent:
@@ -33,9 +34,11 @@ class RobotAgent:
         server_url: str = DEFAULT_SERVER_URL,
         navigation: Optional[NavigationInterface] = None,
         node: Optional[Any] = None,
+        robot_namespace: str = DEFAULT_ROBOT_NAMESPACE,
     ) -> None:
         self.server_url: str = server_url
         self.node = node
+        self.robot_namespace = RobotTopics(robot_namespace).namespace
         self.navigation: NavigationInterface = navigation or self._resolve_default_navigation()
         self.robot_id: Optional[str] = None
         self.is_client_registered: bool = False
@@ -49,7 +52,7 @@ class RobotAgent:
         """Prefer ROS2 navigation when a ROS2 node is available; otherwise keep mock navigation for tests."""
         if self.node is not None:
             try:
-                return ROS2Navigation(node=self.node)
+                return ROS2Navigation(node=self.node, robot_namespace=self.robot_namespace)
             except ValueError:
                 logger.warning("ROS2Navigation requires a valid ROS2 node; falling back to MockNavigation.")
         return MockNavigation()

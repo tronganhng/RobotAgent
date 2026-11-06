@@ -5,3 +5,5 @@ python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 
 python -m pip install websockets
+
+python -m app.main ws://10.11.57.157:5055/ws --robot-namespace robot1
