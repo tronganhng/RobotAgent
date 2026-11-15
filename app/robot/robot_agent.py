@@ -45,6 +45,7 @@ class RobotAgent:
         self.ws: Optional[Any] = None
         self._registration_event: asyncio.Event = asyncio.Event()
         self._current_move_task: Optional[asyncio.Task] = None
+        self._floor_change_timeout = 100.0
         self._state_publisher_task: Optional[asyncio.Task] = None
         self.robot_state: Dict[str, Any] = build_initial_robot_state()
 
@@ -161,6 +162,52 @@ class RobotAgent:
             if self.robot_state["Status"] == RobotStatus.DoingTask.value:
                 self.robot_state["Status"] = RobotStatus.Idle.value
 
+    async def _change_robot_floor(self, data: Dict[str, Any]) -> None:
+        request_id = data.get("RequestId") if "RequestId" in data else data.get("requestId")
+        robot_id = data.get("RobotId") if "RobotId" in data else data.get("robotId")
+        if not isinstance(request_id, str) or not request_id.strip() or robot_id != self.robot_id or not self.robot_id:
+            logger.warning("Ignored ChangeRobotFloor with missing correlation or incorrect RobotId.")
+            return
+
+        payload = data.get("Payload") if "Payload" in data else data.get("payload")
+        if not isinstance(payload, dict):
+            logger.warning("Ignored ChangeRobotFloor with non-object payload.")
+            return
+        elevator_id = payload.get("ElevatorId") if "ElevatorId" in payload else payload.get("elevatorId")
+        target_floor = payload.get("TargetFloor") if "TargetFloor" in payload else payload.get("targetFloor")
+        if not isinstance(elevator_id, str) or not elevator_id.strip() or type(target_floor) is not int:
+            logger.warning("Ignored ChangeRobotFloor with invalid ElevatorId or TargetFloor.")
+            return
+
+        ready = False
+        error = None
+        try:
+            # Include cancellation in the deadline so the backend receives a result
+            # before its default 120-second readiness timeout.
+            async def change() -> bool:
+                await self._cancel_current_motion()
+                return await self.navigation.change_floor(elevator_id, target_floor)
+
+            ready = (await asyncio.wait_for(change(), timeout=self._floor_change_timeout)) is True
+            if ready:
+                self.robot_state["Floor"] = target_floor
+            else:
+                error = "Navigation could not prepare the target floor/map."
+        except asyncio.TimeoutError:
+            error = "Floor/map switching timed out."
+        except Exception as exc:
+            error = str(exc) or type(exc).__name__
+            logger.exception("Floor/map switching failed.")
+
+        if not ready:
+            self.robot_state["Status"] = RobotStatus.Error.value
+        await self.send_message(
+            SocketMessageType.RobotFloorReady,
+            payload={"ElevatorId": elevator_id, "TargetFloor": target_floor,
+                     "IsReady": ready, "ErrorMessage": error},
+            request_id=request_id,
+        )
+
     async def handle_message(self, raw_msg: str) -> None:
         """Parses and handles incoming JSON messages from the Fleet Backend."""
         try:
@@ -196,6 +243,9 @@ class RobotAgent:
                 self._current_move_task = asyncio.create_task(self._execute_move(x, y))
             else:
                 logger.warning(f"Unable to parse MoveRobot coordinates from payload: {payload}")
+
+        elif msg_type == SocketMessageType.ChangeRobotFloor.value:
+            await self._change_robot_floor(data)
 
         # Handle ChargeRobot command
         elif msg_type in (SocketMessageType.ChargeRobot.value, "ChargeRobot"):

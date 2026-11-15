@@ -43,3 +43,15 @@ class RobotTopics:
     @property
     def battery_state(self) -> str:
         return f"/{self.namespace}/battery_state"
+
+    @property
+    def load_map(self) -> str:
+        return f"/{self.namespace}/map_server/load_map"
+
+    @property
+    def initial_pose(self) -> str:
+        return f"/{self.namespace}/initialpose"
+
+    @property
+    def request_nomotion_update(self) -> str:
+        return f"/{self.namespace}/request_nomotion_update"

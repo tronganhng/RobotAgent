@@ -1,0 +1,15 @@
+# Map paths and cabin poses copied from elevator_manager. Verify on the robot.
+# Paths are resolved by the robot's map_server, not by Fleet.
+elevator_id: Elevator_01
+floor_1:
+  map_file: /home/khai/Map_turtlebot/map4.yaml
+  parking_pose:
+    x: -3.270408276983516
+    y: 4.13627478408035
+    yaw: -1.6755781967
+floor_2:
+  map_file: /home/khai/Map_turtlebot/map5.yaml
+  parking_pose:
+    x: -3.7091351359916116
+    y: 9.506669641796217
+    yaw: -1.6053702189

@@ -41,3 +41,11 @@ class NavigationInterface(ABC):
     def get_current_pose(self) -> Tuple[float, float, float, float]:
         """Returns the current estimated pose and battery (x, y, rotation, battery)."""
         pass
+
+    async def change_floor(self, elevator_id: str, target_floor: int) -> bool:
+        """Load the target floor map and relocalize; return True only when ready.
+
+        Implementations without floor support must fail rather than acknowledge
+        readiness on the old navigation map.
+        """
+        raise NotImplementedError("Floor/map switching is not configured for this navigation backend.")

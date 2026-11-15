@@ -3,7 +3,7 @@ import asyncio
 import sys
 import threading
 
-from app.config import DEFAULT_SERVER_URL, logger
+from app.config import DEFAULT_FLOOR_CONFIG, DEFAULT_SERVER_URL, logger
 from app.robot.robot_agent import RobotAgent
 from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE, RobotTopics
 
@@ -13,6 +13,8 @@ def parse_args(argv=None):
     parser.add_argument("server_url", nargs="?", default=DEFAULT_SERVER_URL)
     parser.add_argument("--robot-namespace", default=DEFAULT_ROBOT_NAMESPACE,
                         help="ROS robot namespace (default: %(default)s)")
+    parser.add_argument("--floor-config", default=DEFAULT_FLOOR_CONFIG,
+                        help="YAML containing elevator ID, floor map paths and cabin parking poses")
     args = parser.parse_args(argv)
     try:
         args.robot_namespace = RobotTopics(args.robot_namespace).namespace
@@ -45,7 +47,10 @@ async def main() -> None:
     executor_thread = threading.Thread(target=executor.spin, daemon=True)
     try:
         executor_thread.start()
-        agent = RobotAgent(server_url=server_url, node=node,
+        from app.navigation.ros2_navigation import ROS2Navigation
+        navigation = ROS2Navigation(node=node, robot_namespace=args.robot_namespace,
+                                    floor_config_path=args.floor_config)
+        agent = RobotAgent(server_url=server_url, navigation=navigation,
                            robot_namespace=args.robot_namespace)
         await agent.run()
     finally:

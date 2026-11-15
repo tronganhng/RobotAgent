@@ -1,7 +1,8 @@
 import logging
-from typing import Optional, Tuple
+from typing import Awaitable, Callable, Optional, Tuple
 
 from app.navigation.navigation_interface import NavigationInterface
+from app.config import DEFAULT_FLOOR_CONFIG
 from app.navigation.ros2.topics import DEFAULT_ROBOT_NAMESPACE
 
 logger = logging.getLogger("RobotAgent")
@@ -25,7 +26,10 @@ class ROS2Navigation(NavigationInterface):
         docking_client=None,
         odometry=None,
         robot_namespace: str = DEFAULT_ROBOT_NAMESPACE,
+        floor_changer: Optional[Callable[[str, int], Awaitable[bool]]] = None,
+        floor_config_path: str = DEFAULT_FLOOR_CONFIG,
     ) -> None:
+        self._floor_changer = floor_changer
         self.node = node
         self.robot_namespace = robot_namespace
 
@@ -49,6 +53,12 @@ class ROS2Navigation(NavigationInterface):
             raise ValueError(
                 "ROS2Navigation requires an rclpy Node or injected sub-components."
             )
+
+        if self._floor_changer is None and self.node is not None:
+            from app.navigation.ros2.floor_map_changer import FloorMapChanger
+            self._floor_changer = FloorMapChanger(
+                self.node, floor_config_path, robot_namespace
+            ).change_floor
 
         logger.info("[ROS2Navigation] Initialized facade.")
 
@@ -80,3 +90,9 @@ class ROS2Navigation(NavigationInterface):
         pose = self._odometry.get_current_pose()
         logger.info("[ROS2Navigation] Current pose: x=%.1f, y=%.1f, rotation=%.1f, battery=%.1f", *pose,)
         return pose
+
+    async def change_floor(self, elevator_id: str, target_floor: int) -> bool:
+        """Delegate map loading and localization to the installation's adapter."""
+        if self._floor_changer is None:
+            return await super().change_floor(elevator_id, target_floor)
+        return await self._floor_changer(elevator_id, target_floor)

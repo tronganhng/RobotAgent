@@ -17,6 +17,7 @@ class MockNavigation(NavigationInterface):
         self.rotation: float = 0.0
         self.battery: float = 100.0
         self.speed: float = speed
+        self.floor: Optional[int] = None
         self._nav_task: Optional[asyncio.Task] = None
 
     async def navigate_to(self, x: float, y: float, rotation: float = 0.0) -> bool:
@@ -61,3 +62,9 @@ class MockNavigation(NavigationInterface):
 
     def get_current_pose(self) -> Tuple[float, float, float, float]:
         return self.x, self.y, self.rotation, self.battery
+
+    async def change_floor(self, elevator_id: str, target_floor: int) -> bool:
+        """Simulate map switching without commanding physical movement."""
+        self.floor = target_floor
+        logger.info("[MockNavigation] Ready on floor %s via %s.", target_floor, elevator_id)
+        return True

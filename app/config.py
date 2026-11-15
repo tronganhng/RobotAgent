@@ -1,4 +1,7 @@
 import logging
+from pathlib import Path
+
+DEFAULT_FLOOR_CONFIG = str(Path(__file__).resolve().parent.parent / "config" / "elevator.yaml")
 
 DEFAULT_SERVER_URL = "ws://10.11.57.157:5055/ws"
 
