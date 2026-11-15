@@ -11,7 +11,7 @@ from websockets.exceptions import ConnectionClosed
 from app.config import DEFAULT_SERVER_URL, logger
 from app.communication.message_protocol import SocketMessageType, format_message
 from app.robot.robot_state import build_initial_robot_state, RobotStatus
-from app.handlers.message_handler import extract_robot_id, parse_move_coordinates
+from app.handlers.message_handler import extract_robot_id, parse_move_pose
 from app.navigation.navigation_interface import NavigationInterface
 from app.navigation.mock_navigation import MockNavigation
 from app.navigation.ros2_navigation import ROS2Navigation
@@ -120,11 +120,11 @@ class RobotAgent:
         self.robot_state["Status"] = RobotStatus.Idle.value
         logger.info("Robot stopped successfully.")
 
-    async def _execute_move(self, x: float, y: float) -> None:
-        """Executes navigation to (x, y) asynchronously."""
+    async def _execute_move(self, x: float, y: float, yaw: float = 0.0) -> None:
+        """Executes navigation to (x, y, yaw radians) asynchronously."""
         try:
             self.robot_state["Status"] = RobotStatus.DoingTask.value
-            success = await self.navigation.navigate_to(x, y)
+            success = await self.navigation.navigate_to(x, y, yaw)
             if success:
                 logger.info(f"Robot successfully arrived at ({x}, {y}).")
                 self.robot_state["Status"] = RobotStatus.Idle.value
@@ -234,13 +234,13 @@ class RobotAgent:
         # Handle MoveRobot command
         if msg_type in (SocketMessageType.MoveRobot.value, "MoveRobot"):
             payload = data.get("Payload") if "Payload" in data else data.get("payload")
-            coords = parse_move_coordinates(payload)
+            coords = parse_move_pose(payload)
             if coords is not None:
-                x, y = coords
-                logger.info(f"Received MoveRobot command -> target: ({x}, {y}). Starting navigation...")
+                x, y, yaw = coords
+                logger.info(f"Received MoveRobot command -> target: ({x}, {y}), yaw={yaw}. Starting navigation...")
                 # Cancel existing movement task if running
                 await self._cancel_current_motion()
-                self._current_move_task = asyncio.create_task(self._execute_move(x, y))
+                self._current_move_task = asyncio.create_task(self._execute_move(x, y, yaw))
             else:
                 logger.warning(f"Unable to parse MoveRobot coordinates from payload: {payload}")
 

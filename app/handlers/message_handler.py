@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger("RobotAgent")
@@ -48,3 +49,22 @@ def parse_move_coordinates(payload: Any) -> Optional[Tuple[float, float]]:
                 return None
 
     return None
+
+
+def parse_move_pose(payload: Any) -> Optional[Tuple[float, float, float]]:
+    """Read [x, y, yaw] or {X, Y, Yaw}; legacy XY defaults yaw to zero radians."""
+    coords = parse_move_coordinates(payload)
+    if coords is None:
+        return None
+    yaw = 0.0
+    if isinstance(payload, (list, tuple)) and len(payload) >= 3:
+        yaw = payload[2]
+    elif isinstance(payload, dict):
+        yaw = payload.get("Yaw") if "Yaw" in payload else payload.get("yaw", 0.0)
+    try:
+        if isinstance(yaw, bool):
+            return None
+        pose = (*coords, float(yaw))
+        return pose if all(math.isfinite(value) for value in pose) else None
+    except (TypeError, ValueError, OverflowError):
+        return None

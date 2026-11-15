@@ -198,3 +198,13 @@ Custom deployments can still inject an async `floor_changer` into
 created with injected clients and no ROS node still requires an explicit floor
 adapter. The incoming command handler serializes messages during floor changes;
 repeated request IDs are not deduplicated by the agent.
+
+## MoveRobot yaw
+
+Operation dock moves use `[x, y, yaw]` with yaw in radians. The agent also accepts
+`{ "X": 3, "Y": 4, "Yaw": -1.6 }` (or lowercase keys). Legacy `[x, y]` and
+XY objects default yaw to zero. Invalid or non-finite poses are ignored.
+The complete pose is forwarded to `navigation.navigate_to(x, y, yaw)`;
+`RobotArrived` is sent only after successful navigation. Cabin boarding goals
+must use the source floor's configured parking yaw so the physical orientation
+matches the destination floor localization assumption.
